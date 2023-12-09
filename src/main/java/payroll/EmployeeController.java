@@ -2,6 +2,8 @@ package payroll;
 
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.IanaLinkRelations;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.swing.text.html.parser.Entity;
@@ -53,8 +55,8 @@ public class EmployeeController {
   }
 
   @PutMapping("/employees/{id}")
-  Employee replaceEmployee(@RequestBody Employee newEmployee, @PathVariable Long id) {
-    return repository.findById(id)
+  ResponseEntity<?> replaceEmployee(@RequestBody Employee newEmployee, @PathVariable Long id) {
+    Employee updatedEmployee = repository.findById(id)
         .map(employee -> {
           employee.setName(newEmployee.getName());
           employee.setRole(newEmployee.getRole());
@@ -64,10 +66,34 @@ public class EmployeeController {
           newEmployee.setId(id);
           return repository.save(newEmployee);
         });
+
+    EntityModel<Employee> entityModel = assembler.toModel(updatedEmployee);
+
+    return ResponseEntity
+        .created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+        .body(entityModel);
   }
 
   @DeleteMapping("/employees/{id}")
-  void deleteEmployee(@PathVariable Long id) {
+  ResponseEntity<?> deleteEmployee(@PathVariable Long id) {
     repository.deleteById(id);
+
+    return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/employees")
+  ResponseEntity<?> newEmployee(@RequestBody Employee newEmployee) {
+    // handle POST requests from different client versions
+    // old versions use single string for employee name
+    // new version uses two strings for first and last names
+    // create a new entry in the DB using the POST request body
+    EntityModel<Employee> entityModel = assembler.toModel(repository.save(newEmployee));
+
+    // then send a response with HTTP status code 201 created
+    // with the location header set to the uri to the created resource
+    // and created resource info in the response body
+    return ResponseEntity
+        .created(entityModel.getRequiredLink(IanaLinkRelations.SELF).toUri())
+        .body(entityModel);
   }
 }
